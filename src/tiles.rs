@@ -11,6 +11,7 @@ use crate::{
 };
 
 use super::mesher::PolyMesh;
+use serde::{Serialize, Deserialize};
 
 /// Representation of a link between different polygons either internal to the tile or external (crossing over to another tile).
 #[derive(Clone, Copy, Debug)]
@@ -81,6 +82,10 @@ impl NavMeshTiles {
     /// Returns a [HashMap] containing all tiles in the nav-mesh.
     pub fn get_tiles(&self) -> &HashMap<UVec2, NavMeshTile> {
         &self.tiles
+    }
+
+    pub fn set_tiles(&mut self, tiles: HashMap<UVec2, NavMeshTile>) {
+        self.tiles = tiles;
     }
 
     pub(super) fn add_tile(
@@ -659,4 +664,209 @@ pub(super) fn create_nav_mesh_tile_from_poly_mesh(
         edges: poly_mesh.edges.into_boxed_slice(),
         polygons,
     }
+}
+
+///path should contain filename with .bin extension
+pub fn serialize_nav_mesh_tiles (
+    tiles: HashMap<UVec2, NavMeshTile>,
+    path: String,
+) -> std::io::Result<()> {
+    let mut tiles_to_serialize: HashMap<UVec2, NavMeshTileSerializable> = HashMap::new();
+    let mut polygons_to_serialize: Vec<PolygonSerializable>;
+    let mut edges_to_serialize: Vec<[EdgeConnectionSerializable; 3]>;
+    let mut edge_connections_to_serialize: Vec<EdgeConnectionSerializable>;
+    for (pos, tile) in tiles.iter() {
+        polygons_to_serialize = Vec::new();
+        for polygon in tile.polygons.iter() {
+            polygons_to_serialize.push(convert_original_polygon_to_serializable(polygon));
+        }
+
+        edges_to_serialize = Vec::new();
+        for edge in tile.edges.iter() {
+            edge_connections_to_serialize = Vec::new();
+            for edge_connection in edge {
+                edge_connections_to_serialize.push(match edge_connection{
+                    EdgeConnection::None => EdgeConnectionSerializable::None,
+                    EdgeConnection::Internal(u) => EdgeConnectionSerializable::Internal(*u),
+                    EdgeConnection::External(edge_connection_direction) =>
+                    EdgeConnectionSerializable::External(match edge_connection_direction{
+                        EdgeConnectionDirection::XNegative => EdgeConnectionDirectionSerializable::XNegative,
+                        EdgeConnectionDirection::ZPositive => EdgeConnectionDirectionSerializable::ZPositive,
+                        EdgeConnectionDirection::XPositive => EdgeConnectionDirectionSerializable::XPositive,
+                        EdgeConnectionDirection::ZNegative => EdgeConnectionDirectionSerializable::ZNegative,
+                    }),
+                });
+            }
+            edges_to_serialize.push([edge_connections_to_serialize[0], edge_connections_to_serialize[1], edge_connections_to_serialize[2]]);
+        }
+
+        tiles_to_serialize.insert(*pos, NavMeshTileSerializable{
+            vertices: tile.vertices.clone(),
+            polygons: polygons_to_serialize.into_boxed_slice(),
+            edges: edges_to_serialize.into_boxed_slice(),
+        });
+    }
+
+    let serialized = bincode::serialize(&tiles_to_serialize).expect("Failed to serialize");
+
+    let mut file = std::fs::File::create(path)?;
+    std::io::Write::write_all(&mut file, &serialized)?;
+
+    Ok(())
+}
+
+fn convert_original_polygon_to_serializable(
+    polygon: &Polygon
+) -> PolygonSerializable {
+    let mut links_to_serialize: Vec<LinkSerializable>  = Vec::new();
+
+    for link in &polygon.links {
+        links_to_serialize.push(
+            match link {
+                Link::Internal { edge, neighbour_polygon } =>
+                LinkSerializable::Internal { edge: *edge, neighbour_polygon: *neighbour_polygon },
+                Link::External { edge, neighbour_polygon, direction, bound_min, bound_max } =>
+                LinkSerializable::External { edge: *edge, neighbour_polygon: *neighbour_polygon,
+                    direction: match direction {
+                        EdgeConnectionDirection::XNegative => EdgeConnectionDirectionSerializable::XNegative,
+                        EdgeConnectionDirection::ZPositive => EdgeConnectionDirectionSerializable::ZPositive,
+                        EdgeConnectionDirection::XPositive => EdgeConnectionDirectionSerializable::XPositive,
+                        EdgeConnectionDirection::ZNegative => EdgeConnectionDirectionSerializable::ZNegative,
+                    },
+                    bound_min: *bound_min, bound_max: *bound_max },
+            }
+        );
+    }
+
+    return PolygonSerializable{
+        indices: polygon.indices,
+        links: links_to_serialize,
+        area: polygon.area.0,
+    };
+}
+
+///path should contain filename with .bin extension
+pub fn deserialize_nav_mesh_tiles (
+    path: String
+) -> HashMap<UVec2, NavMeshTile> {
+    let deserialized_tiles: HashMap<UVec2, NavMeshTileSerializable>;
+    let mut deserialized_tiles_converted_to_original: HashMap<UVec2, NavMeshTile> = HashMap::new();
+
+    let mut file = std::fs::File::open(path).expect("Failed to open file");
+    let mut buffer = Vec::new();
+    std::io::Read::read_to_end(&mut file, &mut buffer).expect("Failed to read file");
+
+    deserialized_tiles = bincode::deserialize(&buffer).expect("Failed to deserialize");
+    let mut polygons: Vec<Polygon>;
+    let mut edges: Vec<[EdgeConnection; 3]>;
+    let mut edge_connections: Vec<EdgeConnection>;
+
+    for (pos, tile) in deserialized_tiles.iter() {
+        polygons = Vec::new();
+        for polygon in tile.polygons.iter() {
+            polygons.push(convert_serializable_polygon_to_original(polygon));
+        }
+
+        edges = Vec::new();
+        for edge in tile.edges.iter() {
+            edge_connections = Vec::new();
+            for edge_connection in edge {
+                edge_connections.push(match edge_connection{
+                    EdgeConnectionSerializable::None => EdgeConnection::None,
+                    EdgeConnectionSerializable::Internal(u) => EdgeConnection::Internal(*u),
+                    EdgeConnectionSerializable::External(edge_connection_direction) =>
+                    EdgeConnection::External(match edge_connection_direction{
+                        EdgeConnectionDirectionSerializable::XNegative => EdgeConnectionDirection::XNegative,
+                        EdgeConnectionDirectionSerializable::ZPositive => EdgeConnectionDirection::ZPositive,
+                        EdgeConnectionDirectionSerializable::XPositive => EdgeConnectionDirection::XPositive,
+                        EdgeConnectionDirectionSerializable::ZNegative => EdgeConnectionDirection::ZNegative,
+                    }),
+                });
+            }
+            edges.push([edge_connections[0], edge_connections[1], edge_connections[2]]);
+        }
+        
+        deserialized_tiles_converted_to_original.insert(*pos, NavMeshTile{
+            vertices: tile.vertices.clone(),
+            polygons: polygons.into_boxed_slice(),
+            edges: edges.into_boxed_slice(),
+        });
+    }
+
+    return deserialized_tiles_converted_to_original;
+}
+
+fn convert_serializable_polygon_to_original (
+    serializable_polygon: &PolygonSerializable
+) -> Polygon {
+    let mut links: Vec<Link>  = Vec::new();
+
+    for serializable_link in &serializable_polygon.links {
+        links.push(
+            match serializable_link {
+                LinkSerializable::Internal { edge, neighbour_polygon } =>
+                Link::Internal { edge: *edge, neighbour_polygon: *neighbour_polygon },
+                LinkSerializable::External { edge, neighbour_polygon, direction, bound_min, bound_max } =>
+                Link::External { edge: *edge, neighbour_polygon: *neighbour_polygon,
+                    direction: match direction {
+                        EdgeConnectionDirectionSerializable::XNegative => EdgeConnectionDirection::XNegative,
+                        EdgeConnectionDirectionSerializable::ZPositive => EdgeConnectionDirection::ZPositive,
+                        EdgeConnectionDirectionSerializable::XPositive => EdgeConnectionDirection::XPositive,
+                        EdgeConnectionDirectionSerializable::ZNegative => EdgeConnectionDirection::ZNegative,
+                    },
+                    bound_min: *bound_min, bound_max: *bound_max },
+            }
+        );
+    }
+
+    return Polygon{
+        indices: serializable_polygon.indices,
+        links: SmallVec::from_vec(links),
+        area: Area(serializable_polygon.area),
+    };
+}
+
+#[derive(Serialize, Deserialize)]
+struct NavMeshTileSerializable {
+    pub vertices: Box<[Vec3]>,
+    pub polygons: Box<[PolygonSerializable]>,
+    pub edges: Box<[[EdgeConnectionSerializable; VERTICES_IN_TRIANGLE]]>,
+}
+
+#[derive(Serialize, Deserialize)]
+struct PolygonSerializable {
+    pub indices: [u32; VERTICES_IN_TRIANGLE],
+    pub links: Vec<LinkSerializable>,
+    pub area: u16,
+}
+
+#[derive(Serialize, Deserialize)]
+enum LinkSerializable {
+    Internal {
+        edge: u8,
+        neighbour_polygon: u16,
+    },
+    External {
+        edge: u8,
+        neighbour_polygon: u16,
+        direction: EdgeConnectionDirectionSerializable,
+        bound_min: u8,
+        bound_max: u8,
+    },
+}
+
+
+#[derive(Serialize, Deserialize, Clone, Copy)]
+enum EdgeConnectionDirectionSerializable {
+    XNegative,
+    ZPositive,
+    XPositive,
+    ZNegative,
+}
+
+#[derive(Serialize, Deserialize, Clone, Copy)]
+enum EdgeConnectionSerializable {
+    None,
+    Internal(u16),
+    External(EdgeConnectionDirectionSerializable),
 }
