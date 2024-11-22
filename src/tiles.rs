@@ -668,8 +668,8 @@ pub(super) fn create_nav_mesh_tile_from_poly_mesh(
 
 ///path should contain filename with .bin extension
 pub fn serialize_nav_mesh_tiles (
-    tiles: HashMap<UVec2, NavMeshTile>,
-    path: String,
+    tiles: &HashMap<UVec2, NavMeshTile>,
+    path: &str,
 ) -> std::io::Result<()> {
     let mut tiles_to_serialize: HashMap<UVec2, NavMeshTileSerializable> = HashMap::new();
     let mut polygons_to_serialize: Vec<PolygonSerializable>;
@@ -747,7 +747,7 @@ fn convert_original_polygon_to_serializable(
 
 ///path should contain filename with .bin extension
 pub fn deserialize_nav_mesh_tiles (
-    path: String
+    path: &str
 ) -> HashMap<UVec2, NavMeshTile> {
     let deserialized_tiles: HashMap<UVec2, NavMeshTileSerializable>;
     let mut deserialized_tiles_converted_to_original: HashMap<UVec2, NavMeshTile> = HashMap::new();
