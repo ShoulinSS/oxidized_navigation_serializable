@@ -1,5 +1,5 @@
 [package]
-name = "oxidized_navigation"
+name = "oxidized_navigation_serializable"
 description = "A Nav-Mesh generation plugin for Bevy Engine."
 version = "0.12.0"
 edition = "2021"
