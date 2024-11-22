@@ -5,6 +5,11 @@ I don't know if anyone has encountered the need to save and load the NavMesh gen
 here is a simple usage example:
 
 ```rust
+[dependencies]
+oxidized_navigation_serializable = { git = "https://github.com/ShoulinSS/oxidized_navigation_serializable" }
+
+use oxidized_navigation_serializable::{tiles::{serialize_nav_mesh_tiles, deserialize_nav_mesh_tiles}, NavMesh};
+
 fn save_nav_mesh (
     keys: Res<ButtonInput<KeyCode>>,
     nav_mesh: Res<NavMesh>,
