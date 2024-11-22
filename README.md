@@ -4,6 +4,7 @@ I don't know if anyone has encountered the need to save and load the NavMesh gen
 
 here is a simple usage example:
 
+```rust
 fn save_nav_mesh (
     keys: Res<ButtonInput<KeyCode>>,
     nav_mesh: Res<NavMesh>,
