@@ -1,13 +1,12 @@
 use bevy::{
     math::Vec3Swizzles,
     prelude::{UVec2, Vec2, Vec3},
-    utils::HashMap,
+    utils::{hashbrown::HashSet, HashMap},
 };
 use smallvec::SmallVec;
 
 use crate::{
-    mesher::{EdgeConnection, EdgeConnectionDirection, VERTICES_IN_TRIANGLE},
-    Area, NavMeshSettings,
+    mesher::{EdgeConnection, EdgeConnectionDirection, VERTICES_IN_TRIANGLE}, Area, DirtyTiles, NavMeshSettings
 };
 
 use super::mesher::PolyMesh;
@@ -84,8 +83,9 @@ impl NavMeshTiles {
         &self.tiles
     }
 
-    pub fn set_tiles(&mut self, tiles: HashMap<UVec2, NavMeshTile>) {
+    pub fn set_tiles(&mut self, tiles: HashMap<UVec2, NavMeshTile>, mut commands: bevy::ecs::system::Commands) {
         self.tiles = tiles;
+        commands.insert_resource(DirtyTiles(HashSet::new()));
     }
 
     pub(super) fn add_tile(
