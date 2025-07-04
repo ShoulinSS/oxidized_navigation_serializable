@@ -86,6 +86,7 @@ impl NavMeshTiles {
     pub fn set_tiles(&mut self, tiles: HashMap<UVec2, NavMeshTile>, mut commands: bevy::ecs::system::Commands) {
         self.tiles = tiles;
         commands.insert_resource(DirtyTiles(HashSet::new()));
+        commands.insert_resource(crate::ActiveGenerationTasks(Vec::new()));
     }
 
     pub(super) fn add_tile(
