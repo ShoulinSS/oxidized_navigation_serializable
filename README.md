@@ -24,10 +24,11 @@ fn save_nav_mesh (
 fn load_naw_mesh (
     keys: Res<ButtonInput<KeyCode>>,
     nav_mesh: Res<NavMesh>,
+    mut commands: Commands,
 ){
     if keys.just_pressed(KeyCode::KeyL) {
         let nav_mesh_got = nav_mesh.get();
         let mut nav_mesh_tiles = nav_mesh_got.write().unwrap();
-        nav_mesh_tiles.set_tiles(deserialize_nav_mesh_tiles("assets/OxidizedNavMeshExample.bin"));
+        nav_mesh_tiles.set_tiles(deserialize_nav_mesh_tiles("assets/OxidizedNavMeshExample.bin"), commands);
     }
 }
